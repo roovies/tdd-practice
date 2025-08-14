@@ -41,6 +41,24 @@ public class PointServiceImpl implements PointService {
         pointHistoryTable.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
         return result;
     }
+
+    @Override
+    public UserPoint usePoint(long userId, long amount) {
+        if(amount < 1)
+            throw new RuntimeException("포인트는 1원 이상 사용해야 합니다.");
+
+        UserPoint storedUserPoint = findUserPointByUserId(userId);
+        if (storedUserPoint.point() == 0)
+            throw new RuntimeException("사용할 포인트가 없습니다.");
+
+        if (storedUserPoint.point() < amount)
+            throw new RuntimeException("포인트가 부족합니다.");
+
+        final long remainingPoint = storedUserPoint.point() - amount;
+        UserPoint result = userPointTable.insertOrUpdate(userId, remainingPoint);
+        pointHistoryTable.insert(userId, amount, TransactionType.USE, System.currentTimeMillis());
+        return result;
+    }
 }
 
 

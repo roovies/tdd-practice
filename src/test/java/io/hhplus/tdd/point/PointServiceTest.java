@@ -266,4 +266,99 @@ public class PointServiceTest {
              */
         }
     }
+
+    /** 포인트 사용 기능
+     * 1. 포인트는 1원 이상 사용해야 한다.
+     * 2. 사용할 포인트가 없을 경우 예외가 발생해야 한다.
+     * 3. 사용할 포인트가 보유한 포인트보다 클 경우 예외가 발생해야 한다.
+     * 4. 포인트 사용 시 보유 포인트에서 정상적으로 차감되어야 한다.
+     */
+    @Nested
+    @DisplayName("포인트 사용 테스트")
+    public class UsePointTest {
+
+        @ParameterizedTest
+        @ValueSource(longs = {-1L, 0L})
+        @DisplayName("포인트는 1원 이상 사용해야 한다.")
+        void givenPointLessThanOne_whenUsePoint_thenThrowException(long usingPoint) {
+            // given
+            long userId = 1L;
+            // when & then
+            assertThatThrownBy(() -> pointService.usePoint(userId, usingPoint))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("포인트는 1원 이상 사용해야 합니다.");
+        }
+
+        @Test
+        @DisplayName("사용할 포인트가 없을 경우 예외가 발생해야 한다.")
+        void givenNoPointAvailable_whenUsePoint_thenThrowException() {
+            // given
+            long userId = 1L;
+            long usingPoint = 100L;
+            long currentPoint = 0L;
+            UserPoint storedUserPoint = new UserPoint(userId, currentPoint, 12345L);
+            when(userPointTable.selectById(userId)).thenReturn(storedUserPoint);
+
+            // when
+            assertThatThrownBy(() -> pointService.usePoint(userId, usingPoint))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("사용할 포인트가 없습니다.");
+        }
+
+        @Test
+        @DisplayName("사용할 포인트가 보유한 포인트보다 클 경우 예외가 발생해야 한다.")
+        void givenPointMoreThanExistingPoint_whenUsePoint_thenThrowException() {
+            // given
+            long userId = 1L;
+            long currentPoint = 100L;
+            long usingPoint = 200L;
+            UserPoint storedUserPoint = new UserPoint(userId, currentPoint, 12345L);
+            when(userPointTable.selectById(userId)).thenReturn(storedUserPoint);
+
+            assertThatThrownBy(() -> pointService.usePoint(userId, usingPoint))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("포인트가 부족합니다.");
+        }
+
+        @ParameterizedTest
+        @ValueSource(longs = {100L, 500L, 1000L})
+        @DisplayName("포인트 사용 시 최종 포인트 값은 보유 포인트에서 정상적으로 차감된 값이어야 한다.")
+        void givenSufficientPoint_whenUsePoint_thenPointShouldBeDeducted(long usingPoint) {
+            // given
+            long userId = 1L;
+            long currentPoint = 1000L;
+            long expectedPoint = currentPoint - usingPoint;
+            UserPoint storedUserPoint = new UserPoint(userId, currentPoint, 12345L);
+            when(userPointTable.selectById(userId)).thenReturn(storedUserPoint);
+
+            UserPoint expectedUserPoint = new UserPoint(userId, expectedPoint, 12345L);
+            when(userPointTable.insertOrUpdate(userId, expectedPoint)).thenReturn(expectedUserPoint);
+
+            // when
+            UserPoint result = pointService.usePoint(userId, usingPoint);
+
+            // then
+            assertThat(result.point()).isEqualTo(expectedPoint);
+        }
+
+        @Test
+        @DisplayName("포인트 사용에 성공하면 USE 타입으로 히스토리가 기록되어야 한다.")
+        void givenSufficientPoint_whenUsePoint_thenHistoryShouldBeRecordedAsCharge() {
+            // given
+            long userId = 1L;
+            long currentPoint = 1000L;
+            long usingPoint = 500L;
+
+            // 테스트 대상 메서드 실행 시 해당 반환값(storedUserPoint)를 사용하기 때문에 null이면 안 되는 객체이므로 stub 처리
+            UserPoint storedUserPoint = new UserPoint(userId, currentPoint, 12345L);
+            when(userPointTable.selectById(userId)).thenReturn(storedUserPoint);
+
+            // when
+            pointService.usePoint(userId, usingPoint);
+
+            // then
+            verify(pointHistoryTable, times(1)).insert(eq(userId), eq(usingPoint), eq(TransactionType.USE), anyLong());
+        }
+
+    }
 }

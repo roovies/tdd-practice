@@ -5,4 +5,5 @@ import io.hhplus.tdd.point.domain.UserPoint;
 public interface PointService {
     UserPoint findUserPointByUserId(long userId);
     UserPoint charge(long userId, long amount);
+    UserPoint usePoint(long userId, long amount);
 }
