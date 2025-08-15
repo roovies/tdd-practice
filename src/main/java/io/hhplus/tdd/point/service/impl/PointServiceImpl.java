@@ -27,7 +27,7 @@ public class PointServiceImpl implements PointService {
     }
 
     @Override
-    public UserPoint charge(long userId, long amount) {
+    public synchronized UserPoint charge(long userId, long amount) {
         if(amount < 1)
             throw new RuntimeException("올바른 충전 금액이 아닙니다.");
 
