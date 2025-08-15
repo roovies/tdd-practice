@@ -2,6 +2,7 @@ package io.hhplus.tdd.point;
 
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
+import io.hhplus.tdd.point.domain.PointHistory;
 import io.hhplus.tdd.point.domain.TransactionType;
 import io.hhplus.tdd.point.domain.UserPoint;
 import io.hhplus.tdd.point.service.impl.PointServiceImpl;
@@ -14,6 +15,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -287,6 +291,9 @@ public class PointServiceTest {
             assertThatThrownBy(() -> pointService.usePoint(userId, usingPoint))
                     .isInstanceOf(RuntimeException.class)
                     .hasMessage("포인트는 1원 이상 사용해야 합니다.");
+            /*
+                경계값 테스트 (-1, 0 등 1보다 작은 값들)를 효율적으로 테스트하기 위해 @ParameterizedTest를 사용했다.
+             */
         }
 
         @Test
@@ -303,6 +310,11 @@ public class PointServiceTest {
             assertThatThrownBy(() -> pointService.usePoint(userId, usingPoint))
                     .isInstanceOf(RuntimeException.class)
                     .hasMessage("사용할 포인트가 없습니다.");
+
+            /*
+                보유 포인트를 0원으로 하여 stub으로 만든 후, 사용할 포인트를 100원으로 하여 테스트에 실패하도록 작성하였다.
+                예외를 검증하기 위해 assertThatThrownBy()를 사용하여 예외타입 및 메시지까지 검증했다.
+             */
         }
 
         @Test
@@ -318,6 +330,10 @@ public class PointServiceTest {
             assertThatThrownBy(() -> pointService.usePoint(userId, usingPoint))
                     .isInstanceOf(RuntimeException.class)
                     .hasMessage("포인트가 부족합니다.");
+            /*
+                보유 포인트가 존재하지만, 사용할 포인트가 그거보다 많을 경우 예외가 발생하도록 했다.
+                이를 위해 사용할 포인트보다 적은 포인트를 가지고 있는 stub을 생성했다.
+             */
         }
 
         @ParameterizedTest
@@ -339,6 +355,12 @@ public class PointServiceTest {
 
             // then
             assertThat(result.point()).isEqualTo(expectedPoint);
+            /*
+                실제 포인트를 사용하면, 사용한 금액만큼 차감하여 새로 반영해줘야 한다.
+                이때 insertOrUpdate()를 활용하였고, insertOrUpdate()는 반환값으로 UserPoint를 반환하므로,
+                보유 포인트에서 사용한 포인트를 차감한 기대 결과값(expectedPoint)을 stub으로 생성하여,
+                실제 반환값이랑 일치하는지 검증하였다.
+             */
         }
 
         @Test
@@ -358,7 +380,86 @@ public class PointServiceTest {
 
             // then
             verify(pointHistoryTable, times(1)).insert(eq(userId), eq(usingPoint), eq(TransactionType.USE), anyLong());
+            /*
+                지금까지 작성한 테스트 코드에 의해 비즈니스 로직에 selectById(userId)를 호출한 후, 그 결과를 사용하는 로직이 존재한다.
+                따라서 mock 객체로 만들고 stub을 설정하지 않을 경우 null을 반환하여 NPE가 발생한다.
+                이를 방지하기 위해 selectById(userId)의 결과를 stub으로 생성하여 반환하도록 했다.
+
+                그리고 실제 히스토리의 결과값을 검증하기 어려우므로, 제대로 인자에 맞게 호출되었는지 검증하기 위해 verify() 사용 및 matcher를 사용했다.
+             */
+        }
+    }
+
+    /** 특정 유저의 포인트 충전/이용 내역 조회
+     *  1. 포인트 충전/이용 내역이 없으면 빈 리스트를 반환해야 한다.
+     *  2. 포인트 충전/이용 내역이 있으면 비어있지 않은 리스트를 반환해야 한다.
+     *  3. 포인트 충전/이용 내역은 시간순으로 저장되어야 한다.
+     */
+    @Nested
+    @DisplayName("포인트 충전/이용 내역 조회 테스트")
+    public class GetPointHistoryTest {
+
+        /**
+         Question 2)
+            - Question1과 유사한 질문을 실제 코드로 구현해봤습니다.
+            - 여태까지 포인트 충전/사용/조회 테스트의 경우 바로 기능이 동작하기 위한 규칙을 테스트 코드로 정의했습니다.
+            - 그러나, 저렇게 바로 규칙안에 mock과 stub을 바로 정의해서 테스트 코드를 짜야 하는지
+
+            - 아니면 아래처럼 다음 단계별로 테스트 코드를 작성해야 하는 건지 궁금합니다.
+                1. 포인트 충전/이용 내역이 없으면 빈 리스트를 반환해야 한다.
+                    (순수 TDD - Mock 없이 시작)
+                    => Green에서 단순히 하드코딩으로 빈 리스트 반환하기
+                2. 포인트 충전/이용 내역이 있으면 비어있지 않은 리스트를 반환해야 한다.
+                    => 인자값으로 이용 내역의 존재 유무를 판단할 수 없으므로 외부 API를 통해 가져와야겠다고 판단될 것임
+                        (외부 의존성이 필요한 순간 Mock 도입)
+                    => 따라서 Green에서 작성한 1번의 하드코딩을 수정해서 pointHistoryTable를 이용하도록 테스트 코드를 작성함
+
+            테스트 조건을 얼마나 가장 작은 단위로 어떻게 구분하고, Green에서는 얼마나 최소한의 기능으로 구현해야 할지 조금 헷갈립니다.
+            실무에서는 [하드코딩 → Mock 전환 → 리팩토링] 과정을 거치면 유지보수/작성 속도가 떨어지기 때문에
+            외부 호출이 필요한 순간이 명확하면 처음부터 Mock으로 바로 테스트 케이스를 작성하는 경우가 많다고 해서 궁금합니다.
+         */
+
+        @Test
+        @DisplayName("포인트 충전/이용 내역이 없으면 빈 리스트를 반환해야 한다.")
+        void givenNoHistory_whenGetPointHistory_thenReturnEmptyList() {
+            // given
+            long userId = 1L;
+
+            // when
+            List<PointHistory> result = pointService.findPointHistoryByUserId(userId);
+
+            // then
+            assertThat(result).isEmpty();
+            /*
+                여태까지 했던 포인트 충전, 포인트 사용, 포인트 조회 테스트 코드와는 다르게 하드코딩 방식으로 먼저 접근하도록 했다. (TDD의 이론적인 원칙)
+                    => Question2에도 달아놨지만, 실무적으로 하드코딩 방식으로 안 하는 경우도 있다고 하여 두 가지 방식을 적용해봤다.
+                따라서 이용내역이 없을 경우 빈 리스트를 반환하도록 했다.
+             */
         }
 
+        @Test
+        @DisplayName("포인트 충전/이용 내역이 있으면 비어있지 않은 리스트를 반환해야 한다.")
+        void givenVaildHistory_whenGetPointHistory_thenReturnNotEmptyList() {
+            // given
+            long userId = 1L;
+            long updateMillis = 1000L;
+            List<PointHistory> expectedHistory = Arrays.asList(
+                    new PointHistory(1L, userId, 1000L, TransactionType.CHARGE, updateMillis),
+                    new PointHistory(2L, userId, 500L, TransactionType.USE, updateMillis + 1000L),
+                    new PointHistory(3L, userId, 200L, TransactionType.USE, updateMillis + 2000L)
+            );
+
+            when(pointHistoryTable.selectAllByUserId(userId)).thenReturn(expectedHistory);
+
+            // when
+            List<PointHistory> result = pointService.findPointHistoryByUserId(userId);
+
+            // then
+            assertThat(result).isNotEmpty();
+            /*
+                이용내역이 없을 경우의 테스트 코드에 의해 작성된 하드코딩이 해당 테스트 조건에서 실패하기 때문에
+                외부 API 사용 시점이라 생각하여 pointHistoryTable Mock 객체를 활용해 비어있지 않은 리스트 stub을 생성했다.
+             */
+        }
     }
 }

@@ -2,11 +2,14 @@ package io.hhplus.tdd.point.service.impl;
 
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
+import io.hhplus.tdd.point.domain.PointHistory;
 import io.hhplus.tdd.point.domain.TransactionType;
 import io.hhplus.tdd.point.domain.UserPoint;
 import io.hhplus.tdd.point.service.PointService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -58,6 +61,11 @@ public class PointServiceImpl implements PointService {
         UserPoint result = userPointTable.insertOrUpdate(userId, remainingPoint);
         pointHistoryTable.insert(userId, amount, TransactionType.USE, System.currentTimeMillis());
         return result;
+    }
+
+    @Override
+    public List<PointHistory> findPointHistoryByUserId(long userId) {
+        return pointHistoryTable.selectAllByUserId(userId);
     }
 }
 
