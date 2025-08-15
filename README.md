@@ -38,10 +38,5 @@ private final List<PointHistory> table = new ArrayList<>();
   7. 쓰레드B는 코어2의 CPU캐시에 이전 저장값인 1을 읽어옴
   8. 쓰레드B에서 `cursor=1` 값을 덮어쓰기 함 => 쓰레드A의 작업 내역 삭제됨
 
-<br>
-
-## 1-3. 동시성 문제 해결 방법
-동시성을 해결할 때 `synchronized`를 통해 메서드 전체를 동기화 처리하는 방법과 <br>
-
 
   
